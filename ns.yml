@@ -1,0 +1,88 @@
+---
+- hosts: localhost
+  gather_facts: no
+  connection: local
+  tasks:
+  - name: Create container
+    lxd_container:
+      name: nameserver
+      state: started
+      source:
+        type: image
+        mode: pull
+        server: https://images.linuxcontainers.org
+        protocol: lxd
+        alias: alpine/edge/amd64
+      profiles: ["default"]
+
+  - name: check python is installed in container
+    raw: apk info -e python
+    register: python_install_check
+    changed_when: false
+    failed_when: false
+    delegate_to: nameserver
+  - name: install python in container
+    raw: apk -U add python
+    when: python_install_check.rc == 1
+    delegate_to: nameserver
+
+- hosts:
+    - nameserver
+  gather_facts: no
+  vars:
+    - enable_ipv6: False
+  tasks:
+    - apk: name=bind state=present
+    - copy:
+        dest: /etc/bind/named.conf
+        mode: 0644
+        owner: root
+        group: root
+        force: yes
+        content: |
+          options {
+              directory "/var/bind";
+              pid-file "/var/run/named/named.pid";
+          
+              recursion yes;
+              // The resolver runs in the container in the internal network.
+              // There is no access to the resolver from the outer world.
+              allow-recursion { any; };
+              listen-on { any; };
+              listen-on-v6 { any; };
+              allow-transfer { none; };
+          };
+          
+          zone "." IN {
+              type hint;
+              file "named.ca";
+          };
+          
+          zone "localhost" IN {
+              type master;
+              file "pri/localhost.zone";
+              allow-update { none; };
+              notify no;
+          };
+          
+          zone "127.in-addr.arpa" IN {
+              type master;
+              file "pri/127.zone";
+              allow-update { none; };
+              notify no;
+          };
+      notify: reload named
+    - get_url: url=ftp://ftp.intenic.net/domain/named.cache dest=/var/bind/named.ca mode=0644 owner=root group=root backup=yes
+      notify: reload named
+    - replace: path=/etc/conf.d/named regexp='^OPTS="(?!-4)((?:.(?!-4))*)"$' replace='OPTS="\1 -4"' mode=0644 owner=root group=root backup=yes
+      when: not enable_ipv6
+      notify: reload named
+    - replace: path=/etc/conf.d/named regexp='^OPTS="(.*?)-4(.*?)"$' replace='OPTS="\1\2"' mode=0644 owner=root group=root backup=yes
+      when: enable_ipv6
+      notify: reload named
+    - replace: path=/etc/conf.d/named regexp='^OPTS="\s*(\S*)\s*"$' replace='OPTS="\1"' mode=0644 owner=root group=root backup=yes
+    - service: name=named state=started enabled=yes
+  handlers:
+    # state=reloaded does not work in Alpine: "named: function `reload' defined but does not exist"
+    - name: reload named
+      service: name=named state=restarted

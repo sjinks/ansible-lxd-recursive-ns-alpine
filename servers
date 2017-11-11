@@ -1,0 +1,2 @@
+[containers]
+nameserver ansible_connection=lxd
