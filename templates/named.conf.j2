@@ -1,0 +1,43 @@
+options {
+	directory "/var/bind";
+	pid-file "/var/run/named/named.pid";
+
+	recursion yes;
+	// The resolver runs in the container in the internal network.
+	// There is no access to the resolver from the outer world.
+	allow-recursion { any; };
+	listen-on { any; };
+{% if enable_ipv6 %}
+	listen-on-v6 { any; };
+{% else %}
+	listen-on-v6 { none; };
+{% endif %}
+	allow-transfer { none; };
+
+{% if forwarders|length > 0 %}
+	forwarders {
+{% for item in forwarders %}
+		{{ item }};
+{% endfor %}
+	};
+{% endif %}
+};
+
+zone "." IN {
+	type hint;
+	file "named.ca";
+};
+
+zone "localhost" IN {
+	type master;
+	file "pri/localhost.zone";
+	allow-update { none; };
+	notify no;
+};
+
+zone "127.in-addr.arpa" IN {
+	type master;
+	file "pri/127.zone";
+	allow-update { none; };
+	notify no;
+};
