@@ -1,5 +1,6 @@
 ---
 enable_ipv6: False
 forwarders: []
-lxd_devices: {}
-lxd_config: {}
+lxd_profile: ["default"]
+lxd_devices: Null
+lxd_config: Null
