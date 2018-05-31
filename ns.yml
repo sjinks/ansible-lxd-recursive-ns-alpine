@@ -16,6 +16,7 @@
       devices: "{{ lxd_devices }}"
       config: "{{ lxd_config }}"
       profiles: ["default"]
+      wait_for_ipv4_addresses: true
 
   - name: check python is installed in container
     raw: apk info -e python
@@ -23,8 +24,13 @@
     changed_when: false
     failed_when: false
     delegate_to: nameserver
+  - name: update package list
+    raw: apk update
+    when: python_install_check.rc == 1
+    failed_when: false
+    delegate_to: nameserver
   - name: install python in container
-    raw: apk -U add python
+    raw: apk add python
     when: python_install_check.rc == 1
     delegate_to: nameserver
 
