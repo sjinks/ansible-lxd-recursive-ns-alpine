@@ -13,6 +13,8 @@
         server: https://images.linuxcontainers.org
         protocol: lxd
         alias: alpine/edge/amd64
+      devices: "{{ lxd_devices }}"
+      config: "{{ lxd_config }}"
       profiles: ["default"]
 
   - name: check python is installed in container
